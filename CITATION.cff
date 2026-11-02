@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+title: "BL-ML-CVaR-ESG: code for 'Artificial intelligence for socially responsible investment'"
+version: 1.0.0
+license: MIT
+authors:
+  - family-names: Truyols-Pont
+    given-names: M. Antonia
+    affiliation: Universidad de Oviedo
+  - family-names: Arenas-Parra
+    given-names: Mar
+    affiliation: Universidad de Oviedo
+  - family-names: Bilbao-Terol
+    given-names: Amelia
+    affiliation: Universidad de Oviedo
+preferred-citation:
+  type: article
+  title: "Artificial intelligence for socially responsible investment: a multi-objective decision-making framework"
+  authors:
+    - family-names: Truyols-Pont
+      given-names: M. Antonia
+    - family-names: Arenas-Parra
+      given-names: Mar
+    - family-names: Bilbao-Terol
+      given-names: Amelia
+  journal: "Annals of Operations Research"
+  year: 2026
+  doi: 10.1007/s10479-026-07270-2

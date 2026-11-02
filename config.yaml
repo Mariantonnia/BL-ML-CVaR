@@ -1,0 +1,116 @@
+# =============================================================================
+# BL-ML-CVaR-ESG -- experiment configuration
+# Truyols-Pont, Arenas-Parra & Bilbao-Terol (2026), Annals of Operations Research
+# https://doi.org/10.1007/s10479-026-07270-2
+#
+# Every number used in the paper lives here. Scripts never hard-code parameters.
+# =============================================================================
+
+seed: 121
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  predictions: results/predictions
+  portfolios: results/portfolios
+  tables: results/tables
+  figures: results/figures
+
+# ---------------------------------------------------------------------------
+# Data (Sect. 4)
+# ---------------------------------------------------------------------------
+data:
+  universe_file: data/tickers.csv        # constituents of iShares Global Water UCITS ETF
+  start: "2019-07-01"
+  end: "2024-07-01"                       # inclusive
+  interval: 1wk                           # weekly bars, Monday close
+  price_field: Close                      # adjusted close (yfinance auto_adjust=True)
+  # Missing values are forward-filled only. Back-filling uses future prices
+  # (look-ahead) and is therefore disabled.
+  max_ffill_weeks: 4
+  # Currency in which returns are measured. "local" = each stock in its listing
+  # currency (what the paper did); "USD" = convert with weekly FX rates.
+  # Market-cap weights are ALWAYS computed in USD, otherwise caps quoted in
+  # KRW, JPY, INR... are not comparable.
+  return_currency: local
+  esg_file: data/raw/esg_scores.csv              # LSEG, July 2024 (licensed, not redistributed)
+  shares_file: data/raw/shares_outstanding.csv   # shares outstanding per ticker
+  risk_free_file: data/raw/ecb_deposit_facility.csv
+
+# ---------------------------------------------------------------------------
+# Forecasting (Sect. 3.1 and 4.1)
+# ---------------------------------------------------------------------------
+forecast:
+  window: 30                    # previous 30 weeks as input
+  horizon: 1                    # next-week price
+  train_end: "2022-12-26"       # 70 %
+  val_end: "2023-06-26"         # 10 %   (test: 2023-07-03 -> 2024-07-01, 20 %)
+  models: [lstm, gru, rnn, rf, arima]
+  scaler: minmax                # fitted on the TRAINING split only
+
+  deep:                         # LSTM / GRU / RNN (3 recurrent layers + Dense)
+    epochs: 50
+    tuning:
+      method: optuna            # "optuna" (TPE, what the authors ran) or "grid"
+      n_trials: 25
+      units_1: [64, 128, 256]
+      units_2: [32, 64, 128]
+      units_3: [16, 32, 64]
+      dropout_1: [0.0, 0.2]     # continuous range for optuna / endpoints+mid for grid
+      dropout_2: [0.0, 0.2]
+      dropout_3: [0.0, 0.1]
+      batch_size: [16, 32]
+
+  rf:
+    n_lags: 30
+    cv_splits: 3                # TimeSeriesSplit (no shuffling, no future folds)
+    param_grid:
+      n_estimators: [50, 100, 150]
+      max_depth: [null, 10, 20]
+      min_samples_split: [2, 5, 10]
+      min_samples_leaf: [1, 2, 4]
+
+  arima:
+    rolling_window: 30          # re-estimated every week on the last 30 prices
+    max_p: 2
+    max_d: 1
+    max_q: 2
+
+# ---------------------------------------------------------------------------
+# ESG and Prospect Theory (Sect. 3.2 and 4.2, Eq. 4)
+# ---------------------------------------------------------------------------
+esg:
+  pillars:
+    E: Environmental Pillar Score
+    S: Social Pillar Score
+    G: Governance Pillar Score
+  composite: ESG Score
+  prospect_theory:
+    reference_point: 50     # rp
+    kappa: 0.8              # risk aversion
+    theta: 2.0              # loss aversion
+
+# ---------------------------------------------------------------------------
+# Black-Litterman + copula + CVaR (Sect. 3.3 and 4.3)
+# ---------------------------------------------------------------------------
+portfolio:
+  tau: 0.25
+  # Omega_ii built from the relative MAE of the aggregated forecast (Eq. 7),
+  # computed only with forecast errors observed BEFORE the rebalancing date.
+  omega: rmae            # "rmae" (Eq. 7 literally) or "rmae_squared" (variance units)
+  omega_floor: 1.0e-6
+  copula:
+    family: student_t
+    n_simulations: 10000
+    garch: {p: 1, q: 1, dist: t}
+  cvar_alpha: 0.95
+  cvar_target: 0.05              # th_CVaR (Table 4 sweeps 0.01 ... 0.10)
+  cvar_sensitivity: [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+  esg_score_threshold: 65        # raw score -> PT value 0.38 (Eq. 20)
+  max_weight: 0.10               # M_i
+  solver: ECOS                   # falls back to CLARABEL if not installed
+  initial_wealth: 10000
+
+benchmarks:
+  mv_objective: max_sharpe       # "max_sharpe" or "min_variance"
+  estimation_window: null        # null = expanding window of all past weeks
